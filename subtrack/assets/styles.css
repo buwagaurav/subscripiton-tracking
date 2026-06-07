@@ -1,0 +1,416 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap");
+
+:root {
+  --bg: #07111f;
+  --panel: rgba(15, 23, 42, 0.88);
+  --panel-strong: #111827;
+  --border: rgba(148, 163, 184, 0.14);
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --teal: #2dd4bf;
+  --amber: #f59e0b;
+  --rose: #fb7185;
+  --blue: #38bdf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.16), transparent 26%),
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.14), transparent 24%),
+    linear-gradient(180deg, #020617 0%, var(--bg) 55%, #020617 100%);
+  color: var(--text);
+  font-family: "Manrope", sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+.app-root {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.app-frame {
+  min-height: 100vh;
+}
+
+.sidebar-column {
+  background: rgba(2, 6, 23, 0.92);
+  border-right: 1px solid var(--border);
+}
+
+.content-column {
+  padding: 1.25rem 1.25rem 2rem;
+}
+
+.sidebar-shell {
+  height: 100%;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sidebar-header {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.sidebar-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--teal), var(--blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #02131f;
+}
+
+.sidebar-title,
+.brand-title,
+.page-title,
+.section-title,
+.detail-title,
+.renewal-item-title {
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.sidebar-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.sidebar-copy,
+.brand-subtitle,
+.page-copy,
+.metric-helper,
+.sidebar-footnote,
+.detail-notes,
+.bucket-copy,
+.empty-state {
+  color: var(--muted);
+}
+
+.sidebar-nav .nav-link {
+  color: #cbd5e1;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.4rem;
+  background: transparent;
+}
+
+.sidebar-nav .nav-link.active,
+.sidebar-nav .nav-link:hover {
+  background: rgba(45, 212, 191, 0.12);
+  color: #f8fafc;
+}
+
+.sidebar-user-card {
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.sidebar-user-email,
+.demo-user-email,
+.demo-user-password {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.top-navbar {
+  padding: 0;
+  margin-bottom: 1.25rem;
+}
+
+.brand-title {
+  font-size: 1.55rem;
+  font-weight: 700;
+}
+
+.brand-subtitle {
+  font-size: 0.95rem;
+}
+
+.app-badge {
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.nav-user-name,
+.sidebar-user-name,
+.demo-user-name {
+  font-weight: 700;
+}
+
+.nav-user-name {
+  color: #e2e8f0;
+}
+
+.logout-button {
+  border: 1px solid var(--border);
+}
+
+.page-shell {
+  padding: 0;
+}
+
+.metric-card,
+.panel-card,
+.renewal-item-card,
+.bucket-card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.22);
+}
+
+.metric-card {
+  min-height: 180px;
+}
+
+.metric-label,
+.section-kicker,
+.detail-category,
+.bucket-title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.metric-value,
+.bucket-count {
+  font-size: 2rem;
+  line-height: 1.1;
+  margin-top: 0.7rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+}
+
+.metric-helper {
+  margin-top: 0.8rem;
+  font-size: 0.95rem;
+}
+
+.teal-accent {
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, 0.12), transparent 42%),
+    var(--panel);
+}
+
+.amber-accent {
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.12), transparent 42%),
+    var(--panel);
+}
+
+.rose-accent {
+  background:
+    linear-gradient(180deg, rgba(251, 113, 133, 0.12), transparent 42%),
+    var(--panel);
+}
+
+.blue-accent {
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.12), transparent 42%),
+    var(--panel);
+}
+
+.panel-tall {
+  min-height: 100%;
+}
+
+.section-title {
+  margin: 0.35rem 0 1.15rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.dashboard-alert {
+  border-radius: 18px;
+  border: none;
+}
+
+.alert-title {
+  font-weight: 700;
+}
+
+.alert-subtitle {
+  opacity: 0.85;
+}
+
+.renewal-item-card {
+  margin-bottom: 0.9rem;
+}
+
+.renewal-item-date,
+.detail-date,
+.renewal-cycle,
+.detail-price {
+  color: #cbd5e1;
+}
+
+.renewal-item-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.status-badge {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.page-title {
+  margin-top: 0.35rem;
+  margin-bottom: 0.55rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.page-copy {
+  margin-bottom: 0;
+  max-width: 680px;
+}
+
+.detail-panel {
+  min-height: 180px;
+}
+
+.detail-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.detail-price,
+.detail-date {
+  margin-top: 0.5rem;
+}
+
+.detail-notes {
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
+.bucket-card {
+  margin-bottom: 0.85rem;
+}
+
+.bucket-copy {
+  margin-top: 0.45rem;
+  font-size: 0.92rem;
+}
+
+.action-button,
+.btn,
+.form-control,
+.form-select,
+.modal-content,
+.toast {
+  border-radius: 16px !important;
+}
+
+.modal-content,
+.toast {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.form-control,
+.form-select,
+.form-control:focus,
+.form-select:focus {
+  background: #0b1220;
+  color: var(--text);
+  border: 1px solid #243145;
+  box-shadow: none;
+}
+
+.toast-shell {
+  position: fixed;
+  right: 1.25rem;
+  top: 1.25rem;
+  z-index: 1080;
+}
+
+.chart-card {
+  min-height: 430px;
+}
+
+.login-page-shell {
+  min-height: calc(100vh - 2rem);
+  display: flex;
+  align-items: center;
+}
+
+.login-shell {
+  width: 100%;
+}
+
+.login-card,
+.login-demo-card {
+  min-height: 100%;
+}
+
+.login-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.login-copy {
+  margin-bottom: 1.5rem;
+}
+
+.demo-user-card {
+  margin-bottom: 0.85rem;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(11, 18, 32, 0.9);
+}
+
+@media (max-width: 991px) {
+  .sidebar-column {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-shell {
+    height: auto;
+  }
+
+  .content-column {
+    padding: 1rem;
+  }
+}

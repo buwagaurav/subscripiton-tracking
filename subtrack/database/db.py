@@ -1,0 +1,278 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
+from datetime import date, timedelta
+from pathlib import Path
+
+from sqlalchemy import create_engine, func, inspect, select, text
+from sqlalchemy.orm import Session, joinedload, sessionmaker
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from subtrack.database.models import Base, Category, Subscription, User
+
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(exist_ok=True)
+DATABASE_URL = f"sqlite:///{DATA_DIR / 'subtrack.db'}"
+
+engine = create_engine(DATABASE_URL, echo=False, future=True)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
+
+DUMMY_USERS = [
+    {
+        "full_name": "Aarav Mehta",
+        "email": "aarav@subtrack.dev",
+        "password": "Aarav@123",
+        "subscriptions": [
+            ("Netflix", "Streaming", 15.49, "Monthly", 3, "Family plan"),
+            ("Spotify", "Music", 10.99, "Monthly", 8, "Personal premium plan"),
+            ("Namecheap Domain", "Domains", 14.98, "Yearly", 2, "Primary domain renewal"),
+        ],
+    },
+    {
+        "full_name": "Diya Kapoor",
+        "email": "diya@subtrack.dev",
+        "password": "Diya@123",
+        "subscriptions": [
+            ("Prime Video", "Streaming", 139.00, "Yearly", 24, "Bundled with Prime"),
+            ("Google One", "Cloud Storage", 19.99, "Yearly", 12, "200GB plan"),
+            ("Cult Gym", "Fitness", 35.00, "Monthly", 5, "Monthly membership"),
+        ],
+    },
+    {
+        "full_name": "Rohan Iyer",
+        "email": "rohan@subtrack.dev",
+        "password": "Rohan@123",
+        "subscriptions": [
+            ("ChatGPT", "Productivity", 20.00, "Monthly", 1, "Work research"),
+            ("DigitalOcean", "Hosting", 24.00, "Monthly", 15, "App droplet"),
+            ("iCloud+", "Cloud Storage", 2.99, "Monthly", 0, "50GB storage"),
+        ],
+    },
+    {
+        "full_name": "Sara Thomas",
+        "email": "sara@subtrack.dev",
+        "password": "Sara@123",
+        "subscriptions": [
+            ("Hotstar", "Streaming", 11.99, "Monthly", 6, "Mobile + TV plan"),
+            ("Canva Pro", "Productivity", 14.99, "Monthly", 9, "Design work"),
+            ("Hostinger", "Hosting", 95.88, "Yearly", 21, "Client hosting account"),
+        ],
+    },
+]
+
+
+@contextmanager
+def get_session() -> Session:
+    session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def init_db() -> None:
+    Base.metadata.create_all(bind=engine)
+    _run_migrations()
+    seed_data()
+
+
+def _run_migrations() -> None:
+    inspector = inspect(engine)
+    if "subscriptions" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("subscriptions")}
+    with engine.begin() as connection:
+        if "users" not in inspector.get_table_names():
+            User.__table__.create(bind=connection, checkfirst=True)
+        if "user_id" not in columns:
+            connection.execute(text("ALTER TABLE subscriptions ADD COLUMN user_id INTEGER"))
+
+
+def seed_data() -> None:
+    with get_session() as session:
+        category_names = [
+            "Streaming",
+            "Music",
+            "Cloud Storage",
+            "Productivity",
+            "Domains",
+            "Hosting",
+            "Fitness",
+        ]
+        existing_categories = {
+            category.name: category
+            for category in session.scalars(select(Category).order_by(Category.name)).all()
+        }
+        for category_name in category_names:
+            if category_name not in existing_categories:
+                category = Category(name=category_name)
+                session.add(category)
+                session.flush()
+                existing_categories[category_name] = category
+
+        existing_users = {
+            user.email: user for user in session.scalars(select(User).order_by(User.id)).all()
+        }
+        for record in DUMMY_USERS:
+            if record["email"] not in existing_users:
+                user = User(
+                    full_name=record["full_name"],
+                    email=record["email"],
+                    password_hash=generate_password_hash(record["password"]),
+                )
+                session.add(user)
+                session.flush()
+                existing_users[record["email"]] = user
+
+        default_user = next(iter(existing_users.values()), None)
+        if default_user is not None:
+            legacy_rows = session.scalars(
+                select(Subscription).where(Subscription.user_id.is_(None))
+            ).all()
+            for subscription in legacy_rows:
+                subscription.user_id = default_user.id
+
+        today = date.today()
+        for record in DUMMY_USERS:
+            user = existing_users[record["email"]]
+            existing_names = set(
+                session.scalars(
+                    select(Subscription.name).where(Subscription.user_id == user.id)
+                ).all()
+            )
+            for name, category_name, cost, billing_cycle, days_offset, notes in record["subscriptions"]:
+                if name in existing_names:
+                    continue
+                session.add(
+                    Subscription(
+                        user_id=user.id,
+                        name=name,
+                        category_id=existing_categories[category_name].id,
+                        cost=cost,
+                        billing_cycle=billing_cycle,
+                        renewal_date=today + timedelta(days=days_offset),
+                        notes=notes,
+                    )
+                )
+
+
+def fetch_categories() -> list[Category]:
+    with get_session() as session:
+        return session.scalars(select(Category).order_by(Category.name)).all()
+
+
+def fetch_user(user_id: int) -> User | None:
+    with get_session() as session:
+        return session.get(User, user_id)
+
+
+def fetch_demo_users() -> list[dict]:
+    return [
+        {
+            "full_name": record["full_name"],
+            "email": record["email"],
+            "password": record["password"],
+        }
+        for record in DUMMY_USERS
+    ]
+
+
+def authenticate_user(email: str, password: str) -> User | None:
+    with get_session() as session:
+        user = session.scalar(select(User).where(User.email == email.strip().lower()))
+        if user is None or not check_password_hash(user.password_hash, password):
+            return None
+        return user
+
+
+def fetch_subscriptions(user_id: int) -> list[Subscription]:
+    with get_session() as session:
+        stmt = (
+            select(Subscription)
+            .options(joinedload(Subscription.category))
+            .where(Subscription.user_id == user_id)
+            .order_by(Subscription.renewal_date.asc(), Subscription.name.asc())
+        )
+        return session.scalars(stmt).unique().all()
+
+
+def fetch_subscription(subscription_id: int, user_id: int) -> Subscription | None:
+    with get_session() as session:
+        stmt = (
+            select(Subscription)
+            .options(joinedload(Subscription.category))
+            .where(Subscription.id == subscription_id, Subscription.user_id == user_id)
+        )
+        return session.scalar(stmt)
+
+
+def create_subscription(
+    user_id: int,
+    name: str,
+    category_id: int,
+    cost: float,
+    billing_cycle: str,
+    renewal_date: date,
+    notes: str | None,
+) -> Subscription:
+    with get_session() as session:
+        subscription = Subscription(
+            user_id=user_id,
+            name=name.strip(),
+            category_id=category_id,
+            cost=cost,
+            billing_cycle=billing_cycle,
+            renewal_date=renewal_date,
+            notes=notes.strip() if notes else None,
+        )
+        session.add(subscription)
+        session.flush()
+        session.refresh(subscription)
+        return subscription
+
+
+def update_subscription(
+    user_id: int,
+    subscription_id: int,
+    name: str,
+    category_id: int,
+    cost: float,
+    billing_cycle: str,
+    renewal_date: date,
+    notes: str | None,
+) -> bool:
+    with get_session() as session:
+        subscription = session.scalar(
+            select(Subscription).where(
+                Subscription.id == subscription_id, Subscription.user_id == user_id
+            )
+        )
+        if subscription is None:
+            return False
+        subscription.name = name.strip()
+        subscription.category_id = category_id
+        subscription.cost = cost
+        subscription.billing_cycle = billing_cycle
+        subscription.renewal_date = renewal_date
+        subscription.notes = notes.strip() if notes else None
+        return True
+
+
+def delete_subscription(user_id: int, subscription_id: int) -> bool:
+    with get_session() as session:
+        subscription = session.scalar(
+            select(Subscription).where(
+                Subscription.id == subscription_id, Subscription.user_id == user_id
+            )
+        )
+        if subscription is None:
+            return False
+        session.delete(subscription)
+        return True
