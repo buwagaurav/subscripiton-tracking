@@ -1,8 +1,12 @@
-from dash import html
+from dash import dcc, html
 import dash_bootstrap_components as dbc
 
 
-def build_sidebar(user_name: str | None = None, user_email: str | None = None) -> html.Div:
+def build_sidebar(
+    user_name: str | None = None,
+    user_email: str | None = None,
+    pathname: str = "/",
+) -> html.Div:
     nav_links = [
         ("Overview", "/"),
         ("Subscriptions", "/subscriptions"),
@@ -29,14 +33,18 @@ def build_sidebar(user_name: str | None = None, user_email: str | None = None) -
                 ],
                 className="sidebar-user-card",
             ),
-            dbc.Nav(
+            # dcc.Link goes through Dash's React Router so _pages_content fires correctly.
+            html.Nav(
                 [
-                    dbc.NavLink(label, href=href, active="exact", className="sidebar-link")
+                    dcc.Link(
+                        label,
+                        href=href,
+                        className="nav-link sidebar-link"
+                        + (" active" if pathname == href else ""),
+                    )
                     for label, href in nav_links
                 ],
-                vertical=True,
-                pills=True,
-                className="sidebar-nav",
+                className="sidebar-nav nav nav-pills flex-column",
             ),
             html.Div(
                 [

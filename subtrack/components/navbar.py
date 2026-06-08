@@ -19,7 +19,7 @@ def build_navbar(user_name: str | None = None) -> dbc.Navbar:
                     [
                         dbc.Badge("MVP", color="light", text_color="dark", className="app-badge"),
                         html.Div(user_name or "", className="nav-user-name"),
-                        dbc.Button("Logout", id="logout-button", color="dark", className="logout-button"),
+                        html.A("Logout", href="/do-logout", className="btn btn-dark btn-sm logout-button"),
                     ],
                     className="nav-actions",
                 ),

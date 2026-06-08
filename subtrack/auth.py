@@ -10,6 +10,7 @@ def login_user(email: str, password: str):
     if user is None:
         return None
     session["user_id"] = user.id
+    session.modified = True
     return user
 
 
