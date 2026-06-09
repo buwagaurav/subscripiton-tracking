@@ -84,15 +84,27 @@ def init_db() -> None:
 
 def _run_migrations() -> None:
     inspector = inspect(engine)
-    if "subscriptions" not in inspector.get_table_names():
-        return
+    tables = inspector.get_table_names()
 
-    columns = {column["name"] for column in inspector.get_columns("subscriptions")}
     with engine.begin() as connection:
-        if "users" not in inspector.get_table_names():
+        if "users" not in tables:
             User.__table__.create(bind=connection, checkfirst=True)
-        if "user_id" not in columns:
-            connection.execute(text("ALTER TABLE subscriptions ADD COLUMN user_id INTEGER"))
+
+        if "subscriptions" in tables:
+            sub_cols = {col["name"] for col in inspector.get_columns("subscriptions")}
+            if "user_id" not in sub_cols:
+                connection.execute(text("ALTER TABLE subscriptions ADD COLUMN user_id INTEGER"))
+
+        if "users" in tables:
+            user_cols = {col["name"] for col in inspector.get_columns("users")}
+            for col_name, col_type in [
+                ("google_sub", "VARCHAR(100)"),
+                ("google_access_token", "TEXT"),
+                ("google_refresh_token", "TEXT"),
+                ("google_token_expiry", "DATETIME"),
+            ]:
+                if col_name not in user_cols:
+                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
 
 
 def seed_data() -> None:
@@ -192,6 +204,37 @@ def authenticate_user(email: str, password: str) -> User | None:
         return user
 
 
+def find_or_create_google_user(google_sub: str, email: str, full_name: str) -> User:
+    """
+    Find an existing user by Google subject ID or email, or create a new one.
+    Links google_sub to an existing email-password account on first Google sign-in.
+    """
+    import secrets as _secrets
+
+    with get_session() as session:
+        # 1. Match by google_sub (fastest path for returning Google users)
+        user = session.scalar(select(User).where(User.google_sub == google_sub))
+        if user:
+            return user
+
+        # 2. Match by email — link google_sub to an existing account
+        user = session.scalar(select(User).where(User.email == email.strip().lower()))
+        if user:
+            user.google_sub = google_sub
+            return user
+
+        # 3. New user — create account without a usable password
+        user = User(
+            full_name=full_name,
+            email=email.strip().lower(),
+            password_hash=generate_password_hash(_secrets.token_hex(32)),
+            google_sub=google_sub,
+        )
+        session.add(user)
+        session.flush()
+        return user
+
+
 def fetch_subscriptions(user_id: int) -> list[Subscription]:
     with get_session() as session:
         stmt = (
@@ -263,6 +306,44 @@ def update_subscription(
         subscription.renewal_date = renewal_date
         subscription.notes = notes.strip() if notes else None
         return True
+
+
+def get_google_tokens(user_id: int) -> dict | None:
+    with get_session() as session:
+        user = session.get(User, user_id)
+        if user is None or not user.google_refresh_token:
+            return None
+        return {
+            "access_token": user.google_access_token,
+            "refresh_token": user.google_refresh_token,
+            "expiry": user.google_token_expiry,
+        }
+
+
+def save_google_tokens(
+    user_id: int,
+    access_token: str,
+    refresh_token: str | None,
+    expiry: "datetime | None",
+) -> None:
+    with get_session() as session:
+        user = session.get(User, user_id)
+        if user is None:
+            return
+        user.google_access_token = access_token
+        if refresh_token:
+            user.google_refresh_token = refresh_token
+        user.google_token_expiry = expiry
+
+
+def clear_google_tokens(user_id: int) -> None:
+    with get_session() as session:
+        user = session.get(User, user_id)
+        if user is None:
+            return
+        user.google_access_token = None
+        user.google_refresh_token = None
+        user.google_token_expiry = None
 
 
 def delete_subscription(user_id: int, subscription_id: int) -> bool:

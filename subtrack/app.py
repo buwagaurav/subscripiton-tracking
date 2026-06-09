@@ -1,4 +1,11 @@
 from pathlib import Path
+import logging
+import time
+import traceback
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 import dash
 from dash import Dash, Input, Output, callback, clientside_callback, dcc, page_container, html
@@ -8,8 +15,8 @@ from flask import redirect, request
 from subtrack.auth import current_user, logout_user
 from subtrack.components.navbar import build_navbar
 from subtrack.components.sidebar import build_sidebar
-from subtrack.database.db import init_db
-
+from subtrack.database.db import clear_google_tokens, find_or_create_google_user, init_db, save_google_tokens
+from subtrack import gmail
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -28,6 +35,30 @@ server = app.server
 server.secret_key = "subtrack-mvp-secret-key"
 server.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 server.config["SESSION_COOKIE_HTTPONLY"] = True
+server.config["SESSION_COOKIE_SECURE"] = False
+
+# Server-side store for OAuth CSRF states — avoids session-cookie round-trip issues.
+# Maps state → (timestamp, code_verifier). Works for single-process (dev) deployments.
+_OAUTH_STATES: dict[str, tuple[float, str | None]] = {}
+_STATE_TTL = 300  # 5 minutes
+
+
+def _store_state(state: str, code_verifier: str | None = None) -> None:
+    now = time.time()
+    _OAUTH_STATES[state] = (now, code_verifier)
+    expired = [s for s, (t, _) in list(_OAUTH_STATES.items()) if now - t > _STATE_TTL]
+    for s in expired:
+        _OAUTH_STATES.pop(s, None)
+
+
+def _consume_state(state: str) -> tuple[bool, str | None]:
+    entry = _OAUTH_STATES.pop(state, None)
+    if entry is None:
+        return False, None
+    ts, code_verifier = entry
+    if (time.time() - ts) > _STATE_TTL:
+        return False, None
+    return True, code_verifier
 
 
 @server.before_request
@@ -35,10 +66,16 @@ def require_auth():
     path = request.path
     # Allow Dash internals, static assets, login page, and the logout route.
     if (
-        path.startswith("/_dash")
-        or path.startswith("/_reload")
-        or path.startswith("/assets")
-        or path in ("/favicon.ico", "/login", "/do-logout")
+            path.startswith("/_dash")
+            or path.startswith("/_reload")
+            or path.startswith("/assets")
+            or path in (
+            "/favicon.ico",
+            "/login",
+            "/do-logout",
+            "/auth/google/signin",
+            "/auth/google/signin/callback",
+    )
     ):
         return None
     from flask import session
@@ -51,6 +88,92 @@ def require_auth():
 def do_logout():
     logout_user()
     return redirect("/login")
+
+
+@server.route("/auth/google/signin")
+def google_signin_start():
+    if not gmail.is_configured():
+        return redirect("/login?error=google_not_configured")
+    auth_url, state, code_verifier = gmail.get_signin_url()
+    _store_state(state, code_verifier)
+    return redirect(auth_url)
+
+
+@server.route("/auth/google/signin/callback")
+def google_signin_callback():
+    from flask import session as fsess
+
+    state = request.args.get("state", "")
+    valid, code_verifier = _consume_state(state)
+    if not valid:
+        return redirect("/login?error=state_mismatch")
+
+    code = request.args.get("code")
+    if not code:
+        return redirect("/login?error=no_code")
+
+    try:
+        info = gmail.exchange_signin_code(code, code_verifier)
+        user = find_or_create_google_user(
+            info["google_sub"], info["email"], info["name"]
+        )
+        fsess["user_id"] = user.id
+        fsess.modified = True
+    except Exception:
+        traceback.print_exc()
+        return redirect("/login?error=google_signin_failed")
+
+    return redirect("/")
+
+
+@server.route("/auth/google")
+def google_auth_start():
+    from flask import session as fsess
+    if "user_id" not in fsess:
+        return redirect("/login")
+    if not gmail.is_configured():
+        return redirect("/gmail-import")
+    auth_url, state, code_verifier = gmail.get_auth_url()
+    _store_state(state, code_verifier)
+    return redirect(auth_url)
+
+
+@server.route("/auth/google/callback")
+def google_auth_callback():
+    from flask import session as fsess
+    if "user_id" not in fsess:
+        return redirect("/login")
+
+    state = request.args.get("state", "")
+    valid, code_verifier = _consume_state(state)
+    if not valid:
+        return redirect("/gmail-import?error=state_mismatch")
+
+    code = request.args.get("code")
+    if not code:
+        return redirect("/gmail-import?error=no_code")
+
+    try:
+        tokens = gmail.exchange_code(code, code_verifier)
+        save_google_tokens(
+            fsess["user_id"],
+            tokens["access_token"],
+            tokens.get("refresh_token"),
+            tokens.get("expiry"),
+        )
+    except Exception:
+        return redirect("/gmail-import?error=exchange_failed")
+
+    return redirect("/gmail-import")
+
+
+@server.route("/auth/google/disconnect")
+def google_auth_disconnect():
+    from flask import session as fsess
+    user_id = fsess.get("user_id")
+    if user_id:
+        clear_google_tokens(user_id)
+    return redirect("/gmail-import")
 
 
 app.layout = dbc.Container(

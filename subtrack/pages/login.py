@@ -3,12 +3,22 @@ from dash import Input, Output, State, callback, dcc, html
 import dash_bootstrap_components as dbc
 
 from subtrack.auth import login_user
+from subtrack import gmail
 
 
 dash.register_page(__name__, path="/login", name="Login")
 
 
-def layout() -> dbc.Container:
+def layout(error: str = "") -> dbc.Container:
+    error_messages = {
+        "google_not_configured": "Google sign-in is not configured on this server.",
+        "state_mismatch": "Sign-in session expired. Please try again.",
+        "no_code": "Google did not return an authorization code.",
+        "google_signin_failed": "Google sign-in failed. Please try again or use email/password.",
+    }
+    google_error = error_messages.get(error, "")
+    google_configured = gmail.is_configured()
+
     return dbc.Container(
         [
             dbc.Row(
@@ -37,8 +47,33 @@ def layout() -> dbc.Container:
                                     placeholder="Enter your password",
                                     className="mb-4",
                                 ),
-                                dbc.Button("Sign In", id="login-button", color="primary", className="w-100"),
+                                dbc.Button("Sign In", id="login-button", color="primary", className="w-100 mb-3"),
                                 dcc.Location(id="login-redirect", refresh=True),
+                                # ── Google Sign-In ──────────────────────────
+                                html.Div(
+                                    [
+                                        html.Hr(className="my-3"),
+                                        html.Div("or", className="text-center text-muted small mb-3"),
+                                        html.A(
+                                            [
+                                                html.Img(
+                                                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg",
+                                                    height="20",
+                                                    className="me-2",
+                                                ),
+                                                "Sign in with Google",
+                                            ],
+                                            href="/auth/google/signin",
+                                            className="btn btn-outline-light w-100 d-flex align-items-center justify-content-center",
+                                        ),
+                                        dbc.Alert(
+                                            google_error,
+                                            color="warning",
+                                            is_open=bool(google_error),
+                                            className="mt-3 mb-0",
+                                        ),
+                                    ]
+                                ) if google_configured else html.Div(),
                             ]
                         ),
                         className="panel-card login-card",

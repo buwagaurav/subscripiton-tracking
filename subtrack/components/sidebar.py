@@ -11,6 +11,7 @@ def build_sidebar(
         ("Overview", "/"),
         ("Subscriptions", "/subscriptions"),
         ("Analytics", "/analytics"),
+        ("Gmail Import", "/gmail-import"),
     ]
     return html.Div(
         [

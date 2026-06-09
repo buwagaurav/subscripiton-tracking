@@ -28,6 +28,14 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Google identity — set on first Sign in with Google.
+    google_sub: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+
+    # Gmail OAuth tokens — populated after the user connects their Google account.
+    google_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    google_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    google_token_expiry: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
