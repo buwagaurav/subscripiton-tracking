@@ -15,7 +15,14 @@ from flask import redirect, request
 from subtrack.auth import current_user, logout_user
 from subtrack.components.navbar import build_navbar
 from subtrack.components.sidebar import build_sidebar
-from subtrack.database.db import clear_google_tokens, find_or_create_google_user, init_db, save_google_tokens
+from subtrack.database.db import (
+    clear_google_tokens,
+    find_or_create_google_user,
+    generate_notifications,
+    get_unread_count,
+    init_db,
+    save_google_tokens,
+)
 from subtrack import gmail
 
 APP_DIR = Path(__file__).resolve().parent
@@ -180,6 +187,8 @@ app.layout = dbc.Container(
     [
         # Single Location component — Dash requires exactly one per app.
         dcc.Location(id="app-url"),
+        # Polls for new notifications every 60 seconds.
+        dcc.Interval(id="notif-interval", interval=60_000, n_intervals=0),
         # guard_routes writes a URL path here when it needs to redirect; a
         # clientside_callback below reads it and calls window.location.href.
         dcc.Store(id="nav-signal", storage_type="memory", data=None),
@@ -240,6 +249,39 @@ def guard_routes(pathname: str | None):
         return "/", sidebar, visible, navbar, visible
 
     return dash.no_update, sidebar, visible, navbar, visible
+
+
+@callback(
+    Output("notif-badge", "children"),
+    Output("notif-badge", "style"),
+    Input("notif-interval", "n_intervals"),
+    Input("app-url", "pathname"),
+    prevent_initial_call=False,
+)
+def refresh_notif_badge(_, pathname):
+    user = current_user()
+    if user is None:
+        return "", {"display": "none"}
+    generate_notifications(user.id)
+    count = get_unread_count(user.id)
+    if count == 0:
+        return "", {"display": "none"}
+    return str(count), {
+        "display": "inline-flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "background": "#e74c3c",
+        "color": "#fff",
+        "borderRadius": "50%",
+        "fontSize": "0.65rem",
+        "fontWeight": "700",
+        "minWidth": "1.1rem",
+        "height": "1.1rem",
+        "padding": "0 0.25rem",
+        "position": "absolute",
+        "top": "-4px",
+        "right": "-6px",
+    }
 
 
 if __name__ == "__main__":

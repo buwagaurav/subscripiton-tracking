@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from subtrack.database.models import Base, Category, Subscription, User
+from subtrack.database.models import Base, Category, Notification, Subscription, User
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -89,6 +89,9 @@ def _run_migrations() -> None:
     with engine.begin() as connection:
         if "users" not in tables:
             User.__table__.create(bind=connection, checkfirst=True)
+
+        if "notifications" not in tables:
+            Notification.__table__.create(bind=connection, checkfirst=True)
 
         if "subscriptions" in tables:
             sub_cols = {col["name"] for col in inspector.get_columns("subscriptions")}
@@ -357,3 +360,85 @@ def delete_subscription(user_id: int, subscription_id: int) -> bool:
             return False
         session.delete(subscription)
         return True
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+_NOTIFICATION_RULES: list[tuple[int, str, str]] = [
+    (7,  "7_days",        "{name} — Renews in 7 days (${cost:.2f})"),
+    (1,  "1_day",         "{name} — Renews tomorrow (${cost:.2f})"),
+    (0,  "renewal_day",   "{name} — Renews today (${cost:.2f})"),
+    (-1, "after_renewal", "{name} — Payment processed (${cost:.2f})"),
+]
+
+_NOTIFICATION_ICONS = {
+    "7_days":        "⏰",
+    "1_day":         "⚠️",
+    "renewal_day":   "🔔",
+    "after_renewal": "✅",
+}
+
+
+def generate_notifications(user_id: int) -> None:
+    """Idempotently create notification records for subscriptions due soon."""
+    today = date.today()
+    with get_session() as session:
+        subs = session.scalars(
+            select(Subscription).where(Subscription.user_id == user_id)
+        ).all()
+        for sub in subs:
+            for days_before, ntype, msg_tmpl in _NOTIFICATION_RULES:
+                fire_on = sub.renewal_date - timedelta(days=days_before)
+                if fire_on != today:
+                    continue
+                exists = session.scalar(
+                    select(Notification).where(
+                        Notification.subscription_id == sub.id,
+                        Notification.notification_type == ntype,
+                        Notification.renewal_date == sub.renewal_date,
+                    )
+                )
+                if exists is None:
+                    session.add(Notification(
+                        user_id=user_id,
+                        subscription_id=sub.id,
+                        subscription_name=sub.name,
+                        notification_type=ntype,
+                        message=msg_tmpl.format(name=sub.name, cost=sub.cost),
+                        renewal_date=sub.renewal_date,
+                        is_read=False,
+                    ))
+
+
+def get_notifications(user_id: int) -> list[Notification]:
+    with get_session() as session:
+        return session.scalars(
+            select(Notification)
+            .where(Notification.user_id == user_id)
+            .order_by(Notification.created_at.desc())
+            .limit(100)
+        ).all()
+
+
+def get_unread_count(user_id: int) -> int:
+    with get_session() as session:
+        return session.scalar(
+            select(func.count()).select_from(Notification).where(
+                Notification.user_id == user_id,
+                Notification.is_read == False,  # noqa: E712
+            )
+        ) or 0
+
+
+def mark_all_notifications_read(user_id: int) -> None:
+    with get_session() as session:
+        unread = session.scalars(
+            select(Notification).where(
+                Notification.user_id == user_id,
+                Notification.is_read == False,  # noqa: E712
+            )
+        ).all()
+        for n in unread:
+            n.is_read = True

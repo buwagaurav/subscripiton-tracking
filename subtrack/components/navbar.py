@@ -18,6 +18,19 @@ def build_navbar(user_name: str | None = None) -> dbc.Navbar:
                 html.Div(
                     [
                         dbc.Badge("MVP", color="light", text_color="dark", className="app-badge"),
+                        html.A(
+                            [
+                                html.Span("🔔", className="notif-bell-icon"),
+                                html.Span(
+                                    id="notif-badge",
+                                    className="notif-badge",
+                                    style={"display": "none"},
+                                ),
+                            ],
+                            href="/notifications",
+                            className="notif-bell",
+                            title="Notifications",
+                        ),
                         html.Div(user_name or "", className="nav-user-name"),
                         html.A("Logout", href="/do-logout", className="btn btn-dark btn-sm logout-button"),
                     ],

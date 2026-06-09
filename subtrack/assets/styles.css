@@ -163,6 +163,23 @@ a {
   gap: 0.8rem;
 }
 
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  padding: 0.25rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.notif-bell:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.notif-bell-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 .nav-user-name,
 .sidebar-user-name,
 .demo-user-name {
