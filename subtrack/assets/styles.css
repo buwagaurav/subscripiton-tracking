@@ -100,6 +100,28 @@
 [data-theme="dark"] .btn-secondary:hover,
 [data-theme="dark"] .btn-outline-secondary:hover { border-color: #3f3f46 !important; }
 
+/* ── Dark Mode: Bootstrap Alert overrides ───────────────────── */
+[data-theme="dark"] .alert-danger {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  border-color:     rgba(239, 68, 68, 0.25) !important;
+  color: #f87171 !important;
+}
+[data-theme="dark"] .alert-warning {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-color:     rgba(245, 158, 11, 0.25) !important;
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .alert-success {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color:     rgba(16, 185, 129, 0.25) !important;
+  color: #34d399 !important;
+}
+[data-theme="dark"] .alert-info {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  border-color:     rgba(59, 130, 246, 0.25) !important;
+  color: #93c5fd !important;
+}
+
 /* ── Theme Toggle: icon swap ────────────────────────────────── */
 .theme-toggle-btn .bi-sun    { display: none; }
 .theme-toggle-btn .bi-moon   { display: inline-block; }

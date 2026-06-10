@@ -103,30 +103,47 @@ def layout(error: str = "") -> dbc.Container:
     )
 
     return dbc.Container(
-        dbc.Row(
-            dbc.Col(
-                html.Div(
-                    [
-                        html.Div("ST", className="login-logo-mark"),
-                        html.H1("SubTrack", className="login-title"),
-                        html.P(
-                            "Track every subscription in one clean view.",
-                            className="login-subtitle",
-                        ),
-                        dcc.Location(id="login-redirect", refresh=True),
-                        dbc.Tabs(
-                            [signin_tab, signup_tab],
-                            active_tab="signin",
-                            className="login-tabs",
-                        ),
-                    ],
-                    className="login-card",
-                ),
-                lg=5, md=7, xs=11,
+        [
+            # Floating theme toggle — visible on login page since navbar is hidden
+            html.Button(
+                [html.I(className="bi bi-moon"), html.I(className="bi bi-sun")],
+                id="login-theme-toggle",
+                className="notif-btn theme-toggle-btn",
+                n_clicks=0,
+                title="Toggle dark mode",
+                style={
+                    "position": "fixed",
+                    "top": "1rem",
+                    "right": "1.25rem",
+                    "zIndex": 1000,
+                    "cursor": "pointer",
+                },
             ),
-            className="justify-content-center align-items-center",
-            style={"minHeight": "100vh"},
-        ),
+            dbc.Row(
+                dbc.Col(
+                    html.Div(
+                        [
+                            html.Div("ST", className="login-logo-mark"),
+                            html.H1("SubTrack", className="login-title"),
+                            html.P(
+                                "Track every subscription in one clean view.",
+                                className="login-subtitle",
+                            ),
+                            dcc.Location(id="login-redirect", refresh=True),
+                            dbc.Tabs(
+                                [signin_tab, signup_tab],
+                                active_tab="signin",
+                                className="login-tabs",
+                            ),
+                        ],
+                        className="login-card",
+                    ),
+                    lg=5, md=7, xs=11,
+                ),
+                className="justify-content-center align-items-center",
+                style={"minHeight": "100vh"},
+            ),
+        ],
         fluid=True,
         className="page-shell",
         style={"background": "var(--bg)"},

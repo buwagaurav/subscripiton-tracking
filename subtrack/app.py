@@ -241,7 +241,7 @@ clientside_callback(
     prevent_initial_call=False,
 )
 
-# Toggle dark/light when the button is clicked.
+# Toggle dark/light when the navbar button is clicked.
 clientside_callback(
     """
     function(n_clicks, current_theme) {
@@ -251,6 +251,20 @@ clientside_callback(
     """,
     Output("theme-store", "data"),
     Input("theme-toggle-btn", "n_clicks"),
+    State("theme-store", "data"),
+    prevent_initial_call=True,
+)
+
+# Same toggle for the login page (navbar is hidden there).
+clientside_callback(
+    """
+    function(n_clicks, current_theme) {
+        if (!n_clicks) return window.dash_clientside.no_update;
+        return current_theme === 'dark' ? 'light' : 'dark';
+    }
+    """,
+    Output("theme-store", "data", allow_duplicate=True),
+    Input("login-theme-toggle", "n_clicks"),
     State("theme-store", "data"),
     prevent_initial_call=True,
 )
