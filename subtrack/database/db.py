@@ -195,6 +195,23 @@ def seed_data() -> None:
                 )
 
 
+def create_user(full_name: str, email: str, password: str) -> User | None:
+    """Create a new account. Returns None if the email is already registered."""
+    with get_session() as session:
+        existing = session.scalar(select(User).where(User.email == email.strip().lower()))
+        if existing is not None:
+            return None
+        user = User(
+            full_name=full_name.strip(),
+            email=email.strip().lower(),
+            password_hash=generate_password_hash(password),
+        )
+        session.add(user)
+        session.flush()
+        session.refresh(user)
+        return user
+
+
 def fetch_categories() -> list[Category]:
     with get_session() as session:
         return session.scalars(select(Category).order_by(Category.name)).all()

@@ -3,6 +3,7 @@ from dash import Input, Output, State, callback, dcc, html
 import dash_bootstrap_components as dbc
 
 from subtrack.auth import login_user
+from subtrack.database.db import create_user
 from subtrack import gmail
 
 
@@ -23,18 +24,16 @@ def layout(error: str = "") -> dbc.Container:
         "no_code":               "Google did not return an authorization code.",
         "google_signin_failed":  "Google sign-in failed. Try email/password instead.",
     }
-    google_error    = error_messages.get(error, "")
-    google_enabled  = gmail.is_configured()
+    google_error   = error_messages.get(error, "")
+    google_enabled = gmail.is_configured()
 
     demo_cards = [
         html.Div(
             [
-                html.Div(
-                    [
-                        html.Div(name, className="demo-user-name"),
-                        html.Div(email, className="demo-user-email"),
-                    ]
-                ),
+                html.Div([
+                    html.Div(name, className="demo-user-name"),
+                    html.Div(email, className="demo-user-email"),
+                ]),
                 html.Div(password, className="demo-user-password"),
             ],
             className="demo-user-card",
@@ -42,82 +41,84 @@ def layout(error: str = "") -> dbc.Container:
         for name, email, password in _DEMO_USERS
     ]
 
+    signin_tab = dbc.Tab(
+        [
+            dbc.Alert(id="login-alert", is_open=False, color="danger",
+                      className="mb-3", style={"borderRadius": "var(--r-sm)"}),
+            dbc.Label("Email address", className="form-label"),
+            dbc.Input(id="login-email", type="email",
+                      placeholder="you@example.com", className="mb-3"),
+            dbc.Label("Password", className="form-label"),
+            dbc.Input(id="login-password", type="password",
+                      placeholder="Enter your password", className="mb-4"),
+            dbc.Button("Sign in", id="login-button", color="primary",
+                       className="w-100 mb-1"),
+
+            html.Div([
+                html.Div("or", className="login-divider"),
+                html.A(
+                    [
+                        html.Img(
+                            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg",
+                            height="18",
+                        ),
+                        html.Span("Sign in with Google"),
+                    ],
+                    href="/auth/google/signin",
+                    className="google-btn",
+                ),
+                dbc.Alert(google_error, color="warning", is_open=bool(google_error),
+                          className="mt-3 mb-0",
+                          style={"borderRadius": "var(--r-sm)"}),
+            ]) if google_enabled else html.Div(),
+
+            html.Div("Demo accounts", className="demo-section-label"),
+            html.Div(demo_cards),
+        ],
+        label="Sign in",
+        tab_id="signin",
+    )
+
+    signup_tab = dbc.Tab(
+        [
+            dbc.Alert(id="signup-alert", is_open=False, color="danger",
+                      className="mb-3", style={"borderRadius": "var(--r-sm)"}),
+            dbc.Label("Full name", className="form-label"),
+            dbc.Input(id="signup-name", type="text",
+                      placeholder="Your name", className="mb-3"),
+            dbc.Label("Email address", className="form-label"),
+            dbc.Input(id="signup-email", type="email",
+                      placeholder="you@example.com", className="mb-3"),
+            dbc.Label("Password", className="form-label"),
+            dbc.Input(id="signup-password", type="password",
+                      placeholder="Create a password", className="mb-3"),
+            dbc.Label("Confirm password", className="form-label"),
+            dbc.Input(id="signup-confirm", type="password",
+                      placeholder="Repeat your password", className="mb-4"),
+            dbc.Button("Create account", id="signup-button", color="primary",
+                       className="w-100"),
+        ],
+        label="Create account",
+        tab_id="signup",
+    )
+
     return dbc.Container(
         dbc.Row(
             dbc.Col(
                 html.Div(
                     [
-
-                        # ── Logo mark ────────────────────────────────
                         html.Div("ST", className="login-logo-mark"),
-
-                        # ── Heading ──────────────────────────────────
-                        html.H1("Sign in to SubTrack", className="login-title"),
+                        html.H1("SubTrack", className="login-title"),
                         html.P(
                             "Track every subscription in one clean view.",
                             className="login-subtitle",
                         ),
-
-                        # ── Error alert ───────────────────────────────
-                        dbc.Alert(
-                            id="login-alert",
-                            is_open=False,
-                            color="danger",
-                            className="mb-3",
-                            style={"borderRadius": "var(--r-sm)"},
-                        ),
-
-                        # ── Email / password ──────────────────────────
-                        dbc.Label("Email address", className="form-label"),
-                        dbc.Input(
-                            id="login-email",
-                            type="email",
-                            placeholder="you@example.com",
-                            className="mb-3",
-                        ),
-                        dbc.Label("Password", className="form-label"),
-                        dbc.Input(
-                            id="login-password",
-                            type="password",
-                            placeholder="Enter your password",
-                            className="mb-4",
-                        ),
-                        dbc.Button(
-                            "Sign in",
-                            id="login-button",
-                            color="primary",
-                            className="w-100 mb-1",
-                        ),
                         dcc.Location(id="login-redirect", refresh=True),
-
-                        # ── Google sign-in ────────────────────────────
-                        html.Div(
-                            [
-                                html.Div("or", className="login-divider"),
-                                html.A(
-                                    [
-                                        html.Img(
-                                            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg",
-                                            height="18",
-                                        ),
-                                        html.Span("Sign in with Google"),
-                                    ],
-                                    href="/auth/google/signin",
-                                    className="google-btn",
-                                ),
-                                dbc.Alert(
-                                    google_error,
-                                    color="warning",
-                                    is_open=bool(google_error),
-                                    className="mt-3 mb-0",
-                                    style={"borderRadius": "var(--r-sm)"},
-                                ),
-                            ]
-                        ) if google_enabled else html.Div(),
-
-                        # ── Demo accounts ─────────────────────────────
-                        html.Div("Demo accounts", className="demo-section-label"),
-                        html.Div(demo_cards),
+                        dbc.Tabs(
+                            [signin_tab, signup_tab],
+                            active_tab="signin",
+                            className="login-tabs",
+                        ),
                     ],
                     className="login-card",
                 ),
@@ -146,5 +147,33 @@ def handle_login(_: int, email: str | None, password: str | None):
         return dash.no_update, "Enter both email and password.", True
     user = login_user(email, password)
     if user is None:
-        return dash.no_update, "Invalid credentials. Please try again.", True
+        return dash.no_update, "Invalid email or password.", True
+    return "/", "", False
+
+
+@callback(
+    Output("login-redirect",  "pathname", allow_duplicate=True),
+    Output("signup-alert",    "children"),
+    Output("signup-alert",    "is_open"),
+    Input("signup-button",    "n_clicks"),
+    State("signup-name",      "value"),
+    State("signup-email",     "value"),
+    State("signup-password",  "value"),
+    State("signup-confirm",   "value"),
+    prevent_initial_call=True,
+)
+def handle_signup(_: int, name: str | None, email: str | None,
+                  password: str | None, confirm: str | None):
+    if not name or not email or not password or not confirm:
+        return dash.no_update, "All fields are required.", True
+    if password != confirm:
+        return dash.no_update, "Passwords do not match.", True
+    if len(password) < 6:
+        return dash.no_update, "Password must be at least 6 characters.", True
+
+    user = create_user(name, email, password)
+    if user is None:
+        return dash.no_update, "An account with that email already exists.", True
+
+    login_user(email, password)
     return "/", "", False
