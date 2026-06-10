@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
@@ -12,11 +13,27 @@ from subtrack.database.models import Base, Category, Notification, Subscription,
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
-DATABASE_URL = f"sqlite:///{DATA_DIR / 'subtrack.db'}"
 
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+_raw_url = os.environ.get("DATABASE_URL", "")
+if _raw_url:
+    # Neon/Heroku may return 'postgres://' — SQLAlchemy requires 'postgresql://'
+    if _raw_url.startswith("postgres://"):
+        _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = _raw_url
+    engine = create_engine(
+        DATABASE_URL,
+        echo=False,
+        future=True,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=2,
+    )
+else:
+    DATA_DIR = BASE_DIR / "data"
+    DATA_DIR.mkdir(exist_ok=True)
+    DATABASE_URL = f"sqlite:///{DATA_DIR / 'subtrack.db'}"
+    engine = create_engine(DATABASE_URL, echo=False, future=True)
+
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 DUMMY_USERS = [

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import logging
 import time
@@ -8,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 import dash
-from dash import Dash, Input, Output, callback, clientside_callback, dcc, page_container, html
+from dash import Dash, Input, Output, State, callback, clientside_callback, dcc, page_container, html
 import dash_bootstrap_components as dbc
 from flask import redirect, request
 
@@ -34,12 +35,12 @@ app = Dash(
     use_pages=True,
     pages_folder=str(APP_DIR / "pages"),
     assets_folder=str(APP_DIR / "assets"),
-    external_stylesheets=[dbc.themes.DARKLY],
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
     suppress_callback_exceptions=True,
     title="SubTrack",
 )
 server = app.server
-server.secret_key = "subtrack-mvp-secret-key"
+server.secret_key = os.environ.get("SECRET_KEY", "subtrack-mvp-secret-key")
 server.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 server.config["SESSION_COOKIE_HTTPONLY"] = True
 server.config["SESSION_COOKIE_SECURE"] = False
@@ -193,6 +194,9 @@ app.layout = dbc.Container(
         # clientside_callback below reads it and calls window.location.href.
         dcc.Store(id="nav-signal", storage_type="memory", data=None),
         html.Div(id="_nav-target", style={"display": "none"}),
+        # Persists light/dark preference across sessions.
+        dcc.Store(id="theme-store", storage_type="local", data="light"),
+        html.Div(id="theme-applier", style={"display": "none"}),
         dbc.Row(
             [
                 dbc.Col(id="sidebar-wrapper", xs=12, lg=3, xl=2, className="sidebar-column"),
@@ -219,6 +223,35 @@ clientside_callback(
     "function(path) { if (path) { window.location.href = path; } return ''; }",
     Output("_nav-target", "children"),
     Input("nav-signal", "data"),
+    prevent_initial_call=True,
+)
+
+# Apply theme to <html> element whenever the store value changes (including on load).
+clientside_callback(
+    """
+    function(theme) {
+        var t = theme || 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.setAttribute('data-bs-theme', t);
+        return '';
+    }
+    """,
+    Output("theme-applier", "children"),
+    Input("theme-store", "data"),
+    prevent_initial_call=False,
+)
+
+# Toggle dark/light when the button is clicked.
+clientside_callback(
+    """
+    function(n_clicks, current_theme) {
+        if (!n_clicks) return window.dash_clientside.no_update;
+        return current_theme === 'dark' ? 'light' : 'dark';
+    }
+    """,
+    Output("theme-store", "data"),
+    Input("theme-toggle-btn", "n_clicks"),
+    State("theme-store", "data"),
     prevent_initial_call=True,
 )
 
@@ -266,22 +299,7 @@ def refresh_notif_badge(_, pathname):
     count = get_unread_count(user.id)
     if count == 0:
         return "", {"display": "none"}
-    return str(count), {
-        "display": "inline-flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "background": "#e74c3c",
-        "color": "#fff",
-        "borderRadius": "50%",
-        "fontSize": "0.65rem",
-        "fontWeight": "700",
-        "minWidth": "1.1rem",
-        "height": "1.1rem",
-        "padding": "0 0.25rem",
-        "position": "absolute",
-        "top": "-4px",
-        "right": "-6px",
-    }
+    return str(count), {"display": "flex"}
 
 
 if __name__ == "__main__":

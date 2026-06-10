@@ -19,14 +19,14 @@ _TYPE_LABELS = {
     "7_days":        "7 days before",
     "1_day":         "1 day before",
     "renewal_day":   "Renewal day",
-    "after_renewal": "After renewal",
+    "after_renewal": "Paid",
 }
 
-_TYPE_COLORS = {
-    "7_days":        "#4a9eff",
-    "1_day":         "#f5a623",
-    "renewal_day":   "#e74c3c",
-    "after_renewal": "#2ecc71",
+_TYPE_STYLES = {
+    "7_days":        ("var(--blue-dim)",  "var(--blue)",       "bi-clock"),
+    "1_day":         ("var(--amber-dim)", "var(--amber-text)", "bi-exclamation-triangle"),
+    "renewal_day":   ("var(--red-dim)",   "var(--red-text)",   "bi-bell"),
+    "after_renewal": ("var(--green-dim)", "var(--green-text)", "bi-check-circle"),
 }
 
 
@@ -37,16 +37,15 @@ def layout() -> dbc.Container:
             dbc.Row(
                 dbc.Col(
                     [
-                        html.Div(
-                            [
-                                html.Div("Alerts", className="section-kicker"),
-                                html.H1("Notifications", className="page-title"),
-                            ]
+                        html.Div("Alerts", className="page-kicker"),
+                        html.H1("Notifications", className="page-title"),
+                        html.P(
+                            "Renewal reminders and payment confirmations for your subscriptions.",
+                            className="page-copy",
                         ),
-                        html.Div(id="notif-page-content"),
+                        html.Div(id="notif-page-content", className="mt-4"),
                     ],
-                    lg=10,
-                    xl=8,
+                    lg=10, xl=8,
                 ),
                 className="justify-content-center",
             ),
@@ -60,48 +59,58 @@ def _render_notifications(notifications):
     if not notifications:
         return html.Div(
             [
-                html.Div("🎉", style={"fontSize": "3rem", "marginBottom": "0.5rem"}),
-                html.P("No notifications — all subscriptions are on track.", className="text-muted"),
+                html.Div("✓", className="empty-state-icon"),
+                html.Div("All caught up", className="empty-state-text"),
+                html.P("No notifications — your subscriptions are on track.", className="empty-state-sub"),
             ],
-            className="text-center py-5",
+            className="empty-state py-5",
         )
 
     items = []
     for n in notifications:
-        icon = _NOTIFICATION_ICONS.get(n.notification_type, "🔔")
-        color = _TYPE_COLORS.get(n.notification_type, "#888")
-        label = _TYPE_LABELS.get(n.notification_type, n.notification_type)
-        unread_style = {} if n.is_read else {"borderLeft": f"3px solid {color}", "background": "rgba(255,255,255,0.04)"}
+        icon_str = _NOTIFICATION_ICONS.get(n.notification_type, "🔔")
+        label    = _TYPE_LABELS.get(n.notification_type, n.notification_type)
+        bg, fg, bi_icon = _TYPE_STYLES.get(
+            n.notification_type, ("var(--blue-dim)", "var(--blue)", "bi-bell")
+        )
 
         items.append(
-            dbc.Card(
-                dbc.CardBody(
+            html.Div(
+                [
+                    html.Div(
+                        html.I(className=f"bi {bi_icon}"),
+                        className="notif-icon-wrap",
+                        style={"background": bg, "color": fg},
+                    ),
                     html.Div(
                         [
-                            html.Span(icon, style={"fontSize": "1.4rem", "marginRight": "0.75rem", "flexShrink": 0}),
+                            html.Div(n.message, className="notif-message",
+                                     style={"fontWeight": "600" if not n.is_read else "500"}),
                             html.Div(
                                 [
-                                    html.Div(n.message, style={"fontWeight": "500" if not n.is_read else "400"}),
-                                    html.Div(
-                                        [
-                                            dbc.Badge(label, style={"background": color, "marginRight": "0.5rem"}),
-                                            html.Span(
-                                                n.renewal_date.strftime("%b %d, %Y"),
-                                                className="text-muted",
-                                                style={"fontSize": "0.8rem"},
-                                            ),
-                                        ],
-                                        style={"marginTop": "0.25rem"},
+                                    html.Span(
+                                        label,
+                                        style={
+                                            "background": bg,
+                                            "color": fg,
+                                            "padding": "0.1rem 0.45rem",
+                                            "borderRadius": "99px",
+                                            "fontSize": "0.68rem",
+                                            "fontWeight": "600",
+                                        },
+                                    ),
+                                    html.Span(
+                                        n.renewal_date.strftime("%b %d, %Y"),
+                                        style={"color": "var(--text-3)", "fontSize": "0.72rem"},
                                     ),
                                 ],
-                                style={"flex": 1},
+                                className="notif-meta",
                             ),
                         ],
-                        style={"display": "flex", "alignItems": "center"},
-                    )
-                ),
-                className="mb-2",
-                style={"border": "1px solid rgba(255,255,255,0.1)", **unread_style},
+                        className="notif-body",
+                    ),
+                ],
+                className="notif-row" + ("" if n.is_read else " unread"),
             )
         )
     return html.Div(items)
@@ -109,7 +118,7 @@ def _render_notifications(notifications):
 
 @callback(
     Output("notif-page-content", "children"),
-    Input("notif-page-trigger", "children"),
+    Input("notif-page-trigger",  "children"),
 )
 def load_notifications(_):
     user = current_user()
@@ -117,23 +126,22 @@ def load_notifications(_):
         return html.Div()
 
     generate_notifications(user.id)
-    notifications = get_notifications(user.id)
-    unread_count = sum(1 for n in notifications if not n.is_read)
+    notifications  = get_notifications(user.id)
+    unread_count   = sum(1 for n in notifications if not n.is_read)
 
     header = html.Div(
         [
             html.Span(
                 f"{unread_count} unread" if unread_count else "All caught up",
-                className="text-muted",
-                style={"fontSize": "0.9rem"},
+                style={"fontSize": "0.85rem", "color": "var(--text-2)", "fontWeight": "500"},
             ),
             dbc.Button(
-                "Mark all as read",
+                [html.I(className="bi bi-check2-all me-1"), "Mark all read"],
                 id="mark-all-read-btn",
                 color="secondary",
                 size="sm",
                 outline=True,
-                disabled=unread_count == 0,
+                disabled=(unread_count == 0),
                 style={"marginLeft": "1rem"},
             ),
         ],
@@ -145,7 +153,7 @@ def load_notifications(_):
 
 @callback(
     Output("notif-page-content", "children", allow_duplicate=True),
-    Input("mark-all-read-btn", "n_clicks"),
+    Input("mark-all-read-btn",   "n_clicks"),
     prevent_initial_call=True,
 )
 def handle_mark_all_read(_):
@@ -158,9 +166,12 @@ def handle_mark_all_read(_):
 
     header = html.Div(
         [
-            html.Span("All caught up", className="text-muted", style={"fontSize": "0.9rem"}),
+            html.Span(
+                "All caught up",
+                style={"fontSize": "0.85rem", "color": "var(--text-2)", "fontWeight": "500"},
+            ),
             dbc.Button(
-                "Mark all as read",
+                [html.I(className="bi bi-check2-all me-1"), "Mark all read"],
                 id="mark-all-read-btn",
                 color="secondary",
                 size="sm",

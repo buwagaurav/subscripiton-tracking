@@ -1,45 +1,51 @@
 from dash import html
-import dash_bootstrap_components as dbc
 
 
-def build_navbar(user_name: str | None = None) -> dbc.Navbar:
-    return dbc.Navbar(
-        dbc.Container(
+def build_navbar(user_name: str | None = None) -> html.Div:
+    initials = ""
+    if user_name:
+        parts = user_name.split()
+        initials = (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper()
+
+    return html.Div(
+        html.Div(
             [
-                html.Div(
+                html.Button(
                     [
-                        html.Div("SubTrack", className="brand-title"),
-                        html.Div(
-                            "Subscription intelligence for everyday spending",
-                            className="brand-subtitle",
-                        ),
-                    ]
-                ),
-                html.Div(
-                    [
-                        dbc.Badge("MVP", color="light", text_color="dark", className="app-badge"),
-                        html.A(
-                            [
-                                html.Span("🔔", className="notif-bell-icon"),
-                                html.Span(
-                                    id="notif-badge",
-                                    className="notif-badge",
-                                    style={"display": "none"},
-                                ),
-                            ],
-                            href="/notifications",
-                            className="notif-bell",
-                            title="Notifications",
-                        ),
-                        html.Div(user_name or "", className="nav-user-name"),
-                        html.A("Logout", href="/do-logout", className="btn btn-dark btn-sm logout-button"),
+                        html.I(className="bi bi-moon"),
+                        html.I(className="bi bi-sun"),
                     ],
-                    className="nav-actions",
+                    id="theme-toggle-btn",
+                    className="notif-btn theme-toggle-btn",
+                    title="Toggle dark mode",
+                    n_clicks=0,
+                    style={"cursor": "pointer"},
                 ),
+                html.A(
+                    [
+                        html.I(className="bi bi-bell"),
+                        html.Span(
+                            id="notif-badge",
+                            className="notif-badge",
+                            style={"display": "none"},
+                        ),
+                    ],
+                    href="/notifications",
+                    className="notif-btn",
+                    title="Notifications",
+                ),
+                html.Div(
+                    [
+                        html.Div(initials, className="nav-user-avatar"),
+                        html.Span(user_name or "", className="d-none d-md-inline",
+                                  style={"fontSize": "0.775rem", "fontWeight": "500",
+                                         "color": "var(--text-2)"}),
+                    ],
+                    className="nav-user-chip",
+                ) if user_name else html.Span(),
+                html.A("Sign out", href="/do-logout", className="logout-btn"),
             ],
-            fluid=True,
+            className="nav-actions",
         ),
-        color="transparent",
-        dark=True,
         className="top-navbar",
     )

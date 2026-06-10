@@ -1,5 +1,12 @@
 from dash import dcc, html
-import dash_bootstrap_components as dbc
+
+
+_NAV_ITEMS = [
+    ("bi-house",       "Overview",      "/"),
+    ("bi-credit-card", "Subscriptions", "/subscriptions"),
+    ("bi-bar-chart",   "Analytics",     "/analytics"),
+    ("bi-envelope",    "Gmail Import",  "/gmail-import"),
+]
 
 
 def build_sidebar(
@@ -7,52 +14,54 @@ def build_sidebar(
     user_email: str | None = None,
     pathname: str = "/",
 ) -> html.Div:
+    name = user_name or "Guest"
+    initials = ""
+    parts = name.split()
+    if parts:
+        initials = (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper()
+
     nav_links = [
-        ("Overview", "/"),
-        ("Subscriptions", "/subscriptions"),
-        ("Analytics", "/analytics"),
-        ("Gmail Import", "/gmail-import"),
+        dcc.Link(
+            [
+                html.I(className=f"bi {icon}"),
+                html.Span(label),
+            ],
+            href=href,
+            className="sidebar-link" + (" active" if pathname == href else ""),
+        )
+        for icon, label, href in _NAV_ITEMS
     ]
+
     return html.Div(
         [
+            # ── Wordmark ─────────────────────────────────────────────
             html.Div(
                 [
-                    html.Div("ST", className="sidebar-logo"),
-                    html.Div(
-                        [
-                            html.Div("SubTrack", className="sidebar-title"),
-                            html.Div("Single view of recurring spend", className="sidebar-copy"),
-                        ]
-                    ),
+                    html.Div("ST", className="sidebar-logo-mark"),
+                    html.Span("SubTrack", className="sidebar-brand"),
                 ],
-                className="sidebar-header",
+                className="sidebar-wordmark",
             ),
+
+            # ── Navigation ───────────────────────────────────────────
+            html.Div("Menu", className="sidebar-section"),
+            html.Nav(nav_links, className="sidebar-nav-mobile"),
+
+            # ── Bottom user card ─────────────────────────────────────
             html.Div(
-                [
-                    html.Div(user_name or "Guest", className="sidebar-user-name"),
-                    html.Div(user_email or "Login required", className="sidebar-user-email"),
-                ],
-                className="sidebar-user-card",
-            ),
-            # dcc.Link goes through Dash's React Router so _pages_content fires correctly.
-            html.Nav(
-                [
-                    dcc.Link(
-                        label,
-                        href=href,
-                        className="nav-link sidebar-link"
-                        + (" active" if pathname == href else ""),
-                    )
-                    for label, href in nav_links
-                ],
-                className="sidebar-nav nav nav-pills flex-column",
-            ),
-            html.Div(
-                [
-                    html.Div("Manual tracking, fast validation.", className="sidebar-footnote"),
-                    html.Div("Built with Dash + SQLite", className="sidebar-footnote muted"),
-                ],
-                className="sidebar-footer",
+                html.Div(
+                    [
+                        html.Div(initials, className="sidebar-avatar"),
+                        html.Div(
+                            [
+                                html.Div(name, className="sidebar-user-name"),
+                                html.Div(user_email or "", className="sidebar-user-email"),
+                            ]
+                        ),
+                    ],
+                    className="sidebar-user",
+                ),
+                className="sidebar-bottom",
             ),
         ],
         className="sidebar-shell",

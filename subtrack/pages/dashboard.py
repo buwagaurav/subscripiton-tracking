@@ -7,27 +7,25 @@ from dash import Input, Output, callback, dcc, html
 import dash_bootstrap_components as dbc
 
 from subtrack.auth import current_user
-from subtrack.components.cards import metric_card, renewal_status_badge
+from subtrack.components.cards import (
+    metric_card,
+    renewal_status_badge,
+    service_avatar,
+    service_color,
+    service_initial,
+)
 from subtrack.database.db import fetch_subscriptions
 
 
 dash.register_page(__name__, path="/", name="Dashboard")
 
 
-def _normalize_monthly_cost(cost: float, billing_cycle: str) -> float:
-    return cost if billing_cycle == "Monthly" else cost / 12
+def _monthly(cost: float, cycle: str) -> float:
+    return cost if cycle == "Monthly" else cost / 12
 
 
-def _normalize_annual_cost(cost: float, billing_cycle: str) -> float:
-    return cost * 12 if billing_cycle == "Monthly" else cost
-
-
-def _build_alert(subscription_name: str, days_until: int) -> str:
-    if days_until == 0:
-        return f"{subscription_name} renews today"
-    if days_until == 1:
-        return f"{subscription_name} renews tomorrow"
-    return f"{subscription_name} renews in {days_until} days"
+def _annual(cost: float, cycle: str) -> float:
+    return cost * 12 if cycle == "Monthly" else cost
 
 
 def layout() -> dbc.Container:
@@ -35,94 +33,92 @@ def layout() -> dbc.Container:
     subscriptions = fetch_subscriptions(user.id) if user else []
     today = date.today()
     week_end = today + timedelta(days=7)
-    monthly_spend = sum(
-        _normalize_monthly_cost(item.cost, item.billing_cycle) for item in subscriptions
-    )
-    annual_spend = sum(
-        _normalize_annual_cost(item.cost, item.billing_cycle) for item in subscriptions
-    )
-    due_this_week = [
-        item for item in subscriptions if today <= item.renewal_date <= week_end
-    ]
+
+    monthly_spend = sum(_monthly(s.cost, s.billing_cycle) for s in subscriptions)
+    annual_spend  = sum(_annual(s.cost, s.billing_cycle)  for s in subscriptions)
+    due_this_week = [s for s in subscriptions if today <= s.renewal_date <= week_end]
 
     return dbc.Container(
         [
             dcc.Interval(id="dashboard-refresh", interval=60_000, n_intervals=0),
-            dbc.Row(
+
+            # ── Page header ──────────────────────────────────────────
+            html.Div(
                 [
-                    dbc.Col(
-                        metric_card(
-                            "Monthly Spend",
-                            f"${monthly_spend:,.2f}",
-                            "Normalized recurring monthly outflow",
-                            "teal-accent",
-                        ),
-                        md=6,
-                        xl=3,
-                    ),
-                    dbc.Col(
-                        metric_card(
-                            "Annual Spend",
-                            f"${annual_spend:,.2f}",
-                            "Expected yearly commitment",
-                            "amber-accent",
-                        ),
-                        md=6,
-                        xl=3,
-                    ),
-                    dbc.Col(
-                        metric_card(
-                            "Active Subscriptions",
-                            str(len(subscriptions)),
-                            "Tracked recurring services",
-                            "rose-accent",
-                        ),
-                        md=6,
-                        xl=3,
-                    ),
-                    dbc.Col(
-                        metric_card(
-                            "Due This Week",
-                            str(len(due_this_week)),
-                            "Renewals that need attention soon",
-                            "blue-accent",
-                        ),
-                        md=6,
-                        xl=3,
+                    html.Div("Overview", className="page-kicker"),
+                    html.H1("Dashboard", className="page-title"),
+                    html.P(
+                        "Your subscription spend and upcoming renewals at a glance.",
+                        className="page-copy",
                     ),
                 ],
-                className="g-4 mb-4",
+                className="page-header",
             ),
+
+            # ── Metric cards ─────────────────────────────────────────
+            dbc.Row(
+                [
+                    dbc.Col(
+                        metric_card("Monthly Spend", f"${monthly_spend:,.2f}",
+                                    "Normalized monthly outflow", "teal-accent",
+                                    "bi-currency-dollar"),
+                        xs=6, xl=3, className="mb-3",
+                    ),
+                    dbc.Col(
+                        metric_card("Annual Spend", f"${annual_spend:,.2f}",
+                                    "Projected yearly commitment", "amber-accent",
+                                    "bi-calendar3"),
+                        xs=6, xl=3, className="mb-3",
+                    ),
+                    dbc.Col(
+                        metric_card("Active Plans", str(len(subscriptions)),
+                                    "Tracked recurring services", "blue-accent",
+                                    "bi-stack"),
+                        xs=6, xl=3, className="mb-3",
+                    ),
+                    dbc.Col(
+                        metric_card("Due This Week", str(len(due_this_week)),
+                                    "Renewals needing attention", "rose-accent",
+                                    "bi-bell"),
+                        xs=6, xl=3, className="mb-3",
+                    ),
+                ],
+                className="g-3 mb-2",
+            ),
+
+            # ── Renewals + Alerts ─────────────────────────────────────
             dbc.Row(
                 [
                     dbc.Col(
                         dbc.Card(
                             dbc.CardBody(
                                 [
-                                    html.Div("Dashboard Alerts", className="section-kicker"),
-                                    html.H3("Renewal signals", className="section-title"),
-                                    html.Div(id="dashboard-alerts"),
-                                ]
-                            ),
-                            className="panel-card panel-tall",
-                        ),
-                        lg=7,
-                    ),
-                    dbc.Col(
-                        dbc.Card(
-                            dbc.CardBody(
-                                [
-                                    html.Div("This Month", className="section-kicker"),
+                                    html.Div("Next 30 days", className="section-kicker"),
                                     html.H3("Upcoming renewals", className="section-title"),
                                     html.Div(id="dashboard-upcoming"),
                                 ]
                             ),
                             className="panel-card panel-tall",
                         ),
+                        lg=7,
+                        className="mb-3",
+                    ),
+                    dbc.Col(
+                        dbc.Card(
+                            dbc.CardBody(
+                                [
+                                    html.Div("Needs attention", className="section-kicker"),
+                                    html.H3("Renewal alerts", className="section-title"),
+                                    html.Div(id="dashboard-alerts"),
+                                ]
+                            ),
+                            className="panel-card panel-tall",
+                        ),
                         lg=5,
+                        className="mb-3",
                     ),
                 ],
-                className="g-4",
+                className="g-3",
             ),
         ],
         fluid=True,
@@ -131,58 +127,102 @@ def layout() -> dbc.Container:
 
 
 @callback(
-    Output("dashboard-alerts", "children"),
+    Output("dashboard-alerts",   "children"),
     Output("dashboard-upcoming", "children"),
-    Input("dashboard-refresh", "n_intervals"),
+    Input("dashboard-refresh",   "n_intervals"),
 )
 def refresh_dashboard(_: int):
     user = current_user()
     subscriptions = fetch_subscriptions(user.id) if user else []
-    today = date.today()
+    today     = date.today()
     month_end = today + timedelta(days=30)
 
-    alerts = []
-    upcoming = []
     relevant = sorted(
-        [item for item in subscriptions if today <= item.renewal_date <= month_end],
-        key=lambda item: item.renewal_date,
+        [s for s in subscriptions if today <= s.renewal_date <= month_end],
+        key=lambda s: s.renewal_date,
     )
 
-    for item in relevant[:6]:
-        days_until = (item.renewal_date - today).days
+    # ── Alert list ────────────────────────────────────────────────────────
+    alerts = []
+    for item in relevant[:8]:
+        days = (item.renewal_date - today).days
+        if days > 7:
+            continue
+        if days == 0:
+            msg = f"{item.name} renews today"
+        elif days == 1:
+            msg = f"{item.name} renews tomorrow"
+        else:
+            msg = f"{item.name} renews in {days} days"
+
+        color = "danger" if days <= 1 else "warning"
         alerts.append(
             dbc.Alert(
                 [
-                    html.Div(_build_alert(item.name, days_until), className="alert-title"),
-                    html.Small(item.category.name, className="alert-subtitle"),
+                    html.Div(msg, className="alert-title"),
+                    html.Small(f"${item.cost:,.2f} · {item.billing_cycle}",
+                               className="text-muted"),
                 ],
-                color="danger" if days_until <= 1 else "warning" if days_until <= 7 else "secondary",
+                color=color,
                 className="dashboard-alert",
-            )
-        )
-        upcoming.append(
-            dbc.Card(
-                dbc.CardBody(
-                    [
-                        html.Div(item.name, className="renewal-item-title"),
-                        html.Div(item.renewal_date.strftime("%b %d, %Y"), className="renewal-item-date"),
-                        html.Div(
-                            [
-                                html.Span(f"${item.cost:,.2f}"),
-                                html.Span(item.billing_cycle, className="renewal-cycle"),
-                            ],
-                            className="renewal-item-meta",
-                        ),
-                        renewal_status_badge(days_until),
-                    ]
-                ),
-                className="renewal-item-card",
             )
         )
 
     if not alerts:
-        alerts = [html.Div("No renewals due in the next 30 days.", className="empty-state")]
+        alerts = [
+            html.Div(
+                [
+                    html.Div("✓", className="empty-state-icon"),
+                    html.Div("No urgent renewals", className="empty-state-text"),
+                    html.P("Nothing due in the next 7 days.", className="empty-state-sub"),
+                ],
+                className="empty-state",
+            )
+        ]
+
+    # ── Upcoming timeline ─────────────────────────────────────────────────
+    upcoming = []
+    for item in relevant[:10]:
+        days = (item.renewal_date - today).days
+        color = service_color(item.name)
+        initial = service_initial(item.name)
+        upcoming.append(
+            html.Div(
+                [
+                    html.Div(initial, className="renewal-item-avatar",
+                             style={"background": color}),
+                    html.Div(
+                        [
+                            html.Div(item.name, className="renewal-item-name"),
+                            html.Div(
+                                item.renewal_date.strftime("%b %d, %Y"),
+                                className="renewal-item-date",
+                            ),
+                        ],
+                        className="renewal-item-info",
+                    ),
+                    html.Div(
+                        [
+                            html.Div(f"${item.cost:,.2f}", className="renewal-item-cost"),
+                            renewal_status_badge(days),
+                        ],
+                        className="renewal-item-right",
+                    ),
+                ],
+                className="renewal-item",
+            )
+        )
+
     if not upcoming:
-        upcoming = [html.Div("No upcoming renewals in this window.", className="empty-state")]
+        upcoming = [
+            html.Div(
+                [
+                    html.Div("📅", className="empty-state-icon"),
+                    html.Div("No renewals this month", className="empty-state-text"),
+                    html.P("All caught up for the next 30 days.", className="empty-state-sub"),
+                ],
+                className="empty-state",
+            )
+        ]
 
     return alerts, upcoming
