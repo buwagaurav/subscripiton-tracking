@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 subtrack/data/subtrack.db
 .DS_Store
+.vercel

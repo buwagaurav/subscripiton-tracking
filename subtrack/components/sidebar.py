@@ -6,6 +6,7 @@ _NAV_ITEMS = [
     ("bi-credit-card", "Subscriptions", "/subscriptions"),
     ("bi-bar-chart",   "Analytics",     "/analytics"),
     ("bi-envelope",    "Gmail Import",  "/gmail-import"),
+    ("bi-stars",       "SubTrack AI",   "/ai-chat"),
 ]
 
 
