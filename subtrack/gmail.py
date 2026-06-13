@@ -35,6 +35,10 @@ SIGNIN_REDIRECT_URI = os.environ.get(
 if REDIRECT_URI.startswith("http://") or SIGNIN_REDIRECT_URI.startswith("http://"):
     os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
+# Google sometimes returns extra scopes (e.g. openid) alongside requested ones;
+# relax the scope check so requests_oauthlib doesn't raise a mismatch error.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 SIGNIN_SCOPES = [
     "openid",
@@ -74,7 +78,6 @@ def get_auth_url() -> tuple[str, str, str | None]:
     flow = _make_flow()
     auth_url, state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         prompt="select_account consent",
     )
     code_verifier = flow.code_verifier

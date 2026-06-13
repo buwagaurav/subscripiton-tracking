@@ -45,28 +45,28 @@ server.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 server.config["SESSION_COOKIE_HTTPONLY"] = True
 server.config["SESSION_COOKIE_SECURE"] = False
 
-# Server-side store for OAuth CSRF states — avoids session-cookie round-trip issues.
-# Maps state → (timestamp, code_verifier). Works for single-process (dev) deployments.
-_OAUTH_STATES: dict[str, tuple[float, str | None]] = {}
-_STATE_TTL = 300  # 5 minutes
-
+# OAuth state is stored in the Flask session so it survives server restarts
+# and works correctly with multi-process deployments.
 
 def _store_state(state: str, code_verifier: str | None = None) -> None:
-    now = time.time()
-    _OAUTH_STATES[state] = (now, code_verifier)
-    expired = [s for s, (t, _) in list(_OAUTH_STATES.items()) if now - t > _STATE_TTL]
-    for s in expired:
-        _OAUTH_STATES.pop(s, None)
+    from flask import session as fsess
+    fsess["_oauth_state"] = state
+    fsess["_oauth_cv"] = code_verifier
+    fsess["_oauth_ts"] = time.time()
+    fsess.modified = True
 
 
 def _consume_state(state: str) -> tuple[bool, str | None]:
-    entry = _OAUTH_STATES.pop(state, None)
-    if entry is None:
+    from flask import session as fsess
+    stored = fsess.pop("_oauth_state", None)
+    cv     = fsess.pop("_oauth_cv", None)
+    ts     = fsess.pop("_oauth_ts", 0.0)
+    fsess.modified = True
+    if stored is None or stored != state:
         return False, None
-    ts, code_verifier = entry
-    if (time.time() - ts) > _STATE_TTL:
+    if (time.time() - ts) > 300:  # 5-minute TTL
         return False, None
-    return True, code_verifier
+    return True, cv
 
 
 @server.before_request
@@ -169,8 +169,11 @@ def google_auth_callback():
             tokens.get("refresh_token"),
             tokens.get("expiry"),
         )
-    except Exception:
-        return redirect("/gmail-import?error=exchange_failed")
+    except Exception as exc:
+        traceback.print_exc()
+        import urllib.parse
+        detail = urllib.parse.quote(str(exc)[:200], safe="")
+        return redirect(f"/gmail-import?error=exchange_failed&detail={detail}")
 
     return redirect("/gmail-import")
 
@@ -183,6 +186,66 @@ def google_auth_disconnect():
         clear_google_tokens(user_id)
     return redirect("/gmail-import")
 
+
+app.index_string = """<!DOCTYPE html>
+<html>
+<head>
+    {%metas%}
+    <title>{%title%}</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+    {%css%}
+    <script>
+        (function() {
+            try {
+                var raw = localStorage.getItem('theme-store');
+                var theme = raw ? JSON.parse(raw) : 'light';
+                if (theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    document.documentElement.setAttribute('data-bs-theme', 'dark');
+                    var s = document.getElementById('splash');
+                    if (s) s.style.background = '#0f0f11';
+                }
+            } catch(e) {}
+        })();
+    </script>
+</head>
+<body>
+    <div id="splash">
+        <div class="splash-mark">ST</div>
+        <div class="splash-brand">SubTrack</div>
+        <div class="splash-dots">
+            <span class="splash-dot"></span>
+            <span class="splash-dot"></span>
+            <span class="splash-dot"></span>
+        </div>
+    </div>
+    {%app_entry%}
+    <footer>
+        {%config%}
+        {%scripts%}
+        {%renderer%}
+    </footer>
+    <script>
+        (function() {
+            var POLL_MS = 80, MAX_WAIT = 8000, elapsed = 0;
+            var t = setInterval(function() {
+                elapsed += POLL_MS;
+                var root = document.querySelector('.app-root');
+                if ((root && root.children.length) || elapsed >= MAX_WAIT) {
+                    clearInterval(t);
+                    var splash = document.getElementById('splash');
+                    if (splash) {
+                        splash.classList.add('splash-done');
+                        setTimeout(function() {
+                            if (splash.parentNode) splash.parentNode.removeChild(splash);
+                        }, 450);
+                    }
+                }
+            }, POLL_MS);
+        })();
+    </script>
+</body>
+</html>"""
 
 app.layout = dbc.Container(
     [

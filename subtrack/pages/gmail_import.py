@@ -14,7 +14,15 @@ from subtrack import gmail
 dash.register_page(__name__, path="/gmail-import", name="Gmail Import")
 
 
-def layout() -> dbc.Container:
+_ERROR_MESSAGES = {
+    "state_mismatch":       "OAuth state mismatch — please try connecting again.",
+    "no_code":              "Google did not return an authorization code — please try again.",
+    "exchange_failed":      "Failed to exchange the authorization code — please try again.",
+    "google_not_configured":"Google credentials are not configured on this server.",
+}
+
+
+def layout(error: str = "", detail: str = "") -> dbc.Container:
     user = current_user()
     if user is None:
         return html.Div("Please log in first.")
@@ -22,8 +30,22 @@ def layout() -> dbc.Container:
     if not gmail.is_configured():
         return _unconfigured_layout()
 
+    error_banner = []
+    if error:
+        msg = _ERROR_MESSAGES.get(error, f"An error occurred: {error}")
+        body = [html.Strong(msg)]
+        if detail:
+            import urllib.parse
+            body += [html.Br(), html.Code(urllib.parse.unquote(detail), style={"fontSize": "0.8rem"})]
+        error_banner = [dbc.Alert(body, color="danger", className="mb-3", dismissable=True)]
+
     connected = bool(user.google_refresh_token)
-    return _connected_layout() if connected else _disconnected_layout()
+    page = _connected_layout() if connected else _disconnected_layout()
+
+    # Wrap existing children in a list and prepend the banner if present
+    existing = page.children if isinstance(page.children, list) else [page.children]
+    page.children = error_banner + existing
+    return page
 
 
 def _unconfigured_layout() -> dbc.Container:
@@ -124,6 +146,7 @@ def _connected_layout() -> dbc.Container:
     return dbc.Container(
         [
             dcc.Store(id="gmail-scan-results", storage_type="memory"),
+            dcc.Store(id="gmail-scan-trigger", storage_type="memory", data=False),
             dbc.Row(
                 dbc.Col(
                     [
@@ -142,10 +165,11 @@ def _connected_layout() -> dbc.Container:
                 dbc.Col(
                     [
                         dbc.Button(
-                            "Scan Inbox",
+                            [html.I(className="bi bi-search me-2"), "Scan Inbox"],
                             id="gmail-scan-btn",
                             color="primary",
                             className="me-3",
+                            disabled=False,
                         ),
                         html.A(
                             "Disconnect Gmail",
@@ -176,20 +200,44 @@ def _connected_layout() -> dbc.Container:
 # ---------------------------------------------------------------------------
 
 
+_SCANNING_LABEL = [dbc.Spinner(size="sm", color="light"), html.Span(" Scanning…", className="ms-1")]
+_IDLE_LABEL     = [html.I(className="bi bi-search me-2"), "Scan Inbox"]
+
+
 @callback(
-    Output("gmail-scan-results", "data"),
+    Output("gmail-scan-btn", "disabled"),
+    Output("gmail-scan-btn", "children"),
+    Output("gmail-scan-trigger", "data"),
     Output("gmail-scan-status", "children"),
     Input("gmail-scan-btn", "n_clicks"),
     prevent_initial_call=True,
 )
-def run_scan(_: int):
+def on_scan_click(_):
+    """Step 1 — instant feedback: disable button and show spinner."""
+    return True, _SCANNING_LABEL, True, "Scanning your inbox for subscription receipts…"
+
+
+@callback(
+    Output("gmail-scan-results", "data"),
+    Output("gmail-scan-status", "children", allow_duplicate=True),
+    Output("gmail-scan-btn", "disabled", allow_duplicate=True),
+    Output("gmail-scan-btn", "children", allow_duplicate=True),
+    Input("gmail-scan-trigger", "data"),
+    prevent_initial_call=True,
+)
+def run_scan(trigger):
+    """Step 2 — actual Gmail scan, triggered by the store set in step 1."""
+    if not trigger:
+        raise dash.exceptions.PreventUpdate
     user = current_user()
     if user is None:
-        return [], "Not authenticated."
+        return [], "Not authenticated.", False, _IDLE_LABEL
     results = gmail.scan_inbox(user.id)
     if not results:
-        return [], "No subscription signals found. Your inbox may not have receipts matching known services, or the scan permissions may need refreshing."
-    return results, f"Found {len(results)} subscription signal(s) — review and add the ones you want to track."
+        msg = "No subscription signals found — your inbox may not have receipts matching known services."
+    else:
+        msg = f"Found {len(results)} subscription signal(s) — review and add the ones you want to track."
+    return results, msg, False, _IDLE_LABEL
 
 
 @callback(
